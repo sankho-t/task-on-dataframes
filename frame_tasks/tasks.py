@@ -2,7 +2,9 @@
 
 import re
 import sys
+import warnings
 from copy import copy, deepcopy
+from itertools import groupby
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 
@@ -50,6 +52,9 @@ class Variable:
 
 class BaseData(Protocol):
     columns: Iterable[Union[str, int]]
+
+    def reindex(self, columns=List[str]):
+        ...
 
 
 Arg = str
@@ -118,27 +123,70 @@ class Task:
             raise RuntimeError("Function is not set in task!")
         kwargs = {}
         reference = {}
+        reindex: Dict[Arg, List[str]] = dict(
+            map(
+                lambda x: (x[0], [None] * len(list(x[1]))),
+                groupby(self.requires, key=lambda x: x[0]),
+            )
+        )
+
+        data_pass = {}
         for (data_i, data_col), (arg, arg_col) in req_map.items():
-            kwargs[arg] = copy(data[data_i])
+            data_pass[arg] = copy(data[data_i])
             ident: Union[re.Pattern, str] = arg_col.matcher
             try:
                 ident = arg_col.string
             except AttributeError:
                 pass
             reference[(arg, ident)] = data_col
+            pos: int = self.requires.index((arg, arg_col))
+            reindex[arg][pos] = data_col
 
-        if self.pass_extra:
+        for arg in reindex.keys():
+            absent = set(reindex[arg]).difference(data_pass[arg].columns)
+            if absent:
+                warnings.warn(f"Executing {self.fname}: {absent} not found for {arg}")
+            kwargs[arg] = data_pass[arg].reindex(columns=reindex[arg])
+
+        if self.pass_extra is not False:
             if "requires" in kwargs:
                 del kwargs["requires"]
             if "expects" in kwargs:
                 del kwargs["expects"]
             assert "requires" not in kwargs
             assert "expects" not in kwargs
-            output = self.fcode(requires=reference, expects=expects, **kwargs)
+            output_ = self.fcode(requires=reference, expects=expects, **kwargs)
         else:
-            output = self.fcode(**kwargs)  # type: ignore
-        if not isinstance(output, list):
-            return [output]
+            output_ = self.fcode(**kwargs)  # type: ignore
+
+        if expects:
+            if any([x[0] for x in expects]):
+                if not isinstance(output_, BaseData) and isinstance(output_, Iterable):
+                    for i, exp in groupby(expects, key=lambda x: x[0]):
+                        try:
+                            op = output_[i]
+                        except IndexError:
+                            warnings.warn(
+                                f"Return from {self.fname}: returns less than expected"
+                            )
+                            break
+                        exp_ = set(map(lambda x: x[1], exp))
+                        absent = exp_.difference(op.columns)
+                        if absent:
+                            warnings.warn(
+                                f"Return from {self.fname}: {absent} not found in position {i}"
+                            )
+                    output = list(output_)
+                else:
+                    warnings.warn(f"Return from {self.fname}: expected iterable")
+                    output = [output_]
+            else:
+                op = output_
+                exp_ = set(map(lambda x: x[1], expects))
+                absent = exp_.difference(op.columns)
+                if absent:
+                    warnings.warn(f"Return from {self.fname}: {absent} not found")
+                output = [output_]
         return output
 
 
@@ -162,6 +210,7 @@ class TaskCaller:
         self.task_requires: List[Tuple[str, Variable]] = list(for_task.requires)
         self.task_generates: List[RetArg] = list(for_task.generates)
         self.gen_appends = for_task.appends
+        self.task_name = for_task.fname
 
     def satisfy(self) -> Iterator[Tuple[CallReqsMap, List[RetArg]]]:
         for x in self.satisfy_requires():
@@ -177,7 +226,9 @@ class TaskCaller:
             arg, var = self.task_requires.pop()
             have_items = list(self.have.items())
             if arg in map(lambda x: x[0], self.mapped.values()):
-                have_items = list(filter(lambda x: x[0] == arg, have_items))
+                mapped_arg = filter(lambda x: x[1][0] == arg, self.mapped.items())
+                mapped_ind: int = next(mapped_arg)[0][0]
+                have_items = list(filter(lambda x: x[0] == mapped_ind, have_items))
             for have_arg, ha_vars in have_items:
                 for x in ha_vars:
                     if var == x:

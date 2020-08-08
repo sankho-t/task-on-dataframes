@@ -7,7 +7,7 @@ from tqdm.auto import tqdm
 from .tasks import CallReqsMap, tasks, RetArg, TaskCaller, BaseData
 
 
-MAX_REPEAT_GENERIC_TASK: Optional[int] = 5
+MAX_REPEAT_GENERIC_TASK: Optional[int] = 1
 
 State = NamedTuple(
     "State", [("Vars", Tuple[FrozenSet[str], ...]), ("Tasks", Tuple[str, ...])]
@@ -89,7 +89,7 @@ def find_path(source: List[List[str]], dest: List[List[str]]) -> TaskExec:
 
     tp = TaskProblem(goal=dest, initial_vars=source)
 
-    result = breadth_first(tp, graph_search=False)
+    result = breadth_first(tp, graph_search=True)
     if result:
         return result.path()
     return []
@@ -103,6 +103,8 @@ def Executor(
     current_data = sources
 
     path = find_path(source, build)
+    if not path:
+        raise RuntimeError("Path not found")
     if show_progress:
         path = tqdm(path)
     for action, _state in path:

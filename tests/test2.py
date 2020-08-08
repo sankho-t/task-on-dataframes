@@ -8,7 +8,7 @@ any_name = re.compile(r"(.+)")
 
 @tada.new_task()
 @tada.requires([any_name], arg="x")
-@tada.makes([r"{x.0.0}.alpha"], appends=True)
+@tada.makes([r"{x}.alpha"], appends=True)
 @tada.close_task()
 def remove_num(x: pd.DataFrame, requires, expects) -> pd.DataFrame:
     data = x[requires[("x", any_name)]]
@@ -19,7 +19,7 @@ def remove_num(x: pd.DataFrame, requires, expects) -> pd.DataFrame:
 
 @tada.new_task()
 @tada.requires([any_name], arg="x")
-@tada.makes([r"{x.0.0}.split"], appends=True)
+@tada.makes([r"{x}.split"], appends=True)
 @tada.close_task()
 def splitter(x: pd.DataFrame, requires, expects) -> pd.DataFrame:
     data = x[requires[("x", any_name)]].str.split(" ").explode()
