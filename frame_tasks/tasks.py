@@ -181,12 +181,20 @@ class TaskCaller:
             for have_arg, ha_vars in have_items:
                 for x in ha_vars:
                     if var == x:
-                        caller2 = deepcopy(self)
-                        caller2.mapped[(have_arg, x)] = arg, var
-                        for option in caller2.satisfy_requires():
+                        task_req0 = self.task_requires.copy()
+                        z = None
+                        if (have_arg, x) in self.mapped:
+                            z = self.mapped[(have_arg, x)]
+                        self.mapped[(have_arg, x)] = arg, var
+                        for option in self.satisfy_requires():
                             yield dict(
                                 [((have_arg, x), (arg, var))] + list(option.items())
                             )
+                        if z:
+                            self.mapped[(have_arg, x)] = z
+                        else:
+                            del self.mapped[(have_arg, x)]
+                        self.task_requires = task_req0
         else:
             yield {}
 
