@@ -192,9 +192,16 @@ class TaskCaller:
 
     def get_generates(self, requires_satisfied: CallReqsMap) -> List[RetArg]:
         def replace_with_req(m) -> str:
-            arg, var_ind_, match_ind_ = m.groups()
-            # indices that refer to the require variable
-            var_ind, match_ind = int(var_ind_), int(match_ind_)
+            grp = iter(m.groups())
+            arg = next(grp)
+            try:
+                var_ind = int(next(grp))
+            except (StopIteration, TypeError):
+                var_ind = 0
+            try:
+                match_ind = int(next(grp))
+            except (StopIteration, TypeError):
+                match_ind = 0
 
             refer = [x for x in requires_satisfied.items() if x[1][0] == arg][var_ind]
             refer_var: Variable = refer[1][1]
@@ -211,7 +218,7 @@ class TaskCaller:
         generates = []
         for (index, c) in self.task_generates:
 
-            gen_new = re.sub(r"{(\w+)\.(\d+)\.(\d+)}", replace_with_req, c)
+            gen_new = re.sub(r"{(\w+)(?:\.(\d+)(?:\.(\d+))?)?}", replace_with_req, c)
             generates.append((index, gen_new))
 
         if self.gen_appends:
