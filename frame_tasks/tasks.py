@@ -35,7 +35,10 @@ class Variable:
 
     def __eq__(self, x: object) -> bool:
         if isinstance(x, str):
-            return re.match(self.matcher, x) is not None
+            try:
+                return self.string == x
+            except AttributeError:
+                return re.match(self.matcher, x) is not None
         elif isinstance(x, Variable):
             try:
                 return self == x.string
@@ -139,11 +142,19 @@ class Task:
             except AttributeError:
                 pass
             reference[(arg, ident)] = data_col
-            pos: int = self.requires.index((arg, arg_col))
+            refer_pos = next(
+                filter(
+                    lambda x: (x[1][0] == arg)
+                    and ((x[1][1] == arg_col) or (x[1][1].matcher == arg_col.matcher)),
+                    enumerate(self.requires),
+                )
+            )
+            pos: int = refer_pos[0]
             reindex[arg][pos] = data_col
 
         for arg in reindex.keys():
             absent = set(reindex[arg]).difference(data_pass[arg].columns)
+            assert all(reindex[arg])
             if absent:
                 warnings.warn(f"Executing {self.fname}: {absent} not found for {arg}")
             kwargs[arg] = data_pass[arg].reindex(columns=reindex[arg])
@@ -182,6 +193,14 @@ class Task:
                     output = [output_]
             else:
                 op = output_
+                if self.appends and len(reindex) == 1:
+                    extras = (
+                        data_pass[arg]
+                        .drop_duplicates(subset=reindex[arg])
+                        .set_index(reindex[arg])
+                    )
+                    if not extras.empty:
+                        op = op.join(extras, on=reindex[arg])
                 exp_ = set(map(lambda x: x[1], expects))
                 absent = exp_.difference(op.columns)
                 if absent:
@@ -198,6 +217,10 @@ class NotSolvable(RuntimeError):
     pass
 
 
+class BadTask(RuntimeError):
+    pass
+
+
 HaveVars = Dict[int, List[str]]
 
 
@@ -207,17 +230,30 @@ class TaskCaller:
         # map have[i][j] to Task: argument, variable
         self.mapped: CallReqsMap = {}
         self.satisfied = False
-        self.task_requires: List[Tuple[str, Variable]] = list(for_task.requires)
         self.task_generates: List[RetArg] = list(for_task.generates)
         self.gen_appends = for_task.appends
         self.task_name = for_task.fname
+
+        no_dep_reqs = []
+        for xa, xr in for_task.requires:
+            try:
+                if not re.search(r"{.*?}", xr.string):
+                    no_dep_reqs.append(xa)
+            except AttributeError:
+                no_dep_reqs.append(xa)
+
+        if for_task.requires and not no_dep_reqs:
+            raise BadTask(f"All requirments for task {for_task} are dynamic")
+        self.task_requires: List[Tuple[str, Variable]] = sorted(
+            for_task.requires, key=lambda x: x[0] in no_dep_reqs
+        )
 
     def satisfy(self) -> Iterator[Tuple[CallReqsMap, List[RetArg]]]:
         for x in self.satisfy_requires():
             try:
                 y = self.get_generates(x)
             except NotSolvable:
-                pass
+                continue
             yield (x, y)
 
     def satisfy_requires(self) -> Iterator[CallReqsMap]:
@@ -231,6 +267,17 @@ class TaskCaller:
                 have_items = list(filter(lambda x: x[0] == mapped_ind, have_items))
             for have_arg, ha_vars in have_items:
                 for x in ha_vars:
+                    try:
+                        re.search(r"{.*?}", var.string)
+                    except AttributeError:
+                        pass
+                    else:
+                        try:
+                            var.string = self.replace_name_with_req(
+                                var.string, self.mapped
+                            )
+                        except NotSolvable:
+                            continue
                     if var == x:
                         task_req0 = self.task_requires.copy()
                         z = None
@@ -238,9 +285,10 @@ class TaskCaller:
                             z = self.mapped[(have_arg, x)]
                         self.mapped[(have_arg, x)] = arg, var
                         for option in self.satisfy_requires():
-                            yield dict(
+                            ret = dict(
                                 [((have_arg, x), (arg, var))] + list(option.items())
                             )
+                            yield ret
                         if z:
                             self.mapped[(have_arg, x)] = z
                         else:
@@ -249,7 +297,8 @@ class TaskCaller:
         else:
             yield {}
 
-    def get_generates(self, requires_satisfied: CallReqsMap) -> List[RetArg]:
+    @staticmethod
+    def replace_name_with_req(name: str, req: CallReqsMap) -> str:
         def replace_with_req(m) -> str:
             grp = iter(m.groups())
             arg = next(grp)
@@ -262,7 +311,10 @@ class TaskCaller:
             except (StopIteration, TypeError):
                 match_ind = 0
 
-            refer = [x for x in requires_satisfied.items() if x[1][0] == arg][var_ind]
+            try:
+                refer = [x for x in req.items() if x[1][0] == arg][var_ind]
+            except IndexError:
+                raise NotSolvable()
             refer_var: Variable = refer[1][1]
             _caller_arg, caller_var = refer[0]
 
@@ -270,14 +322,18 @@ class TaskCaller:
 
             if not m2:
                 raise NotSolvable(
-                    f"{c} does not match with {refer_var} and {caller_var}"
+                    f"{name} does not match with {refer_var} and {caller_var}"
                 )
             return m2.groups()[match_ind]
+
+        return re.sub(r"{(\w+)(?:\.(\d+)(?:\.(\d+))?)?}", replace_with_req, name)
+
+    def get_generates(self, requires_satisfied: CallReqsMap) -> List[RetArg]:
 
         generates = []
         for (index, c) in self.task_generates:
 
-            gen_new = re.sub(r"{(\w+)(?:\.(\d+)(?:\.(\d+))?)?}", replace_with_req, c)
+            gen_new = self.replace_name_with_req(c, requires_satisfied)
             generates.append((index, gen_new))
 
         if self.gen_appends:
@@ -287,3 +343,14 @@ class TaskCaller:
                 for col in cols:
                     generates.append((ind, col))
         return generates
+
+
+def test_call(
+    x: List[BaseData], for_task: Task
+) -> Iterator[Tuple[CallReqsMap, List[RetArg]]]:
+    hv = {}
+    for i, xx in enumerate(x):
+        hv[i] = list(xx.columns)
+    task_caller = TaskCaller(hv, for_task)
+
+    return task_caller.satisfy()
