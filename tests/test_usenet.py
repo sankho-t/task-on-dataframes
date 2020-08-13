@@ -83,7 +83,7 @@ def tokenize_clean(x, requires, expects):
 
 @tada.new_task()
 @tada.requires([pat(r"(.+)")], arg="x")
-@tada.makes([r"{x}.counts"], appends=False)
+@tada.makes([r"{x}.counts", r"{x}"], appends=False)
 @tada.close_task()
 def counts(x, requires, expects):
     counts = x[x.columns[0]].value_counts().reset_index()
@@ -97,41 +97,27 @@ def counts(x, requires, expects):
 @tada.makes([r"{x}.top90"], appends=False)
 @tada.close_task()
 def top90(x, y, requires, expects):
-    thresh = y[y.columns[1]].sum() * 0.9
-    y = y.loc[y[y.columns[1]] > thresh]
-    y["istop"] = True
+    col = y[y.columns[1]]
+    sum = col.sum()
+    topwords = col.cumsum() < 0.9 * sum
+    y.loc[topwords, "istop"] = True
     x = x.join(y.set_index(y.columns[0])["istop"], on=x.columns[0])
-    x = x.loc[x["istop"]]
-    cols = list(x.columns)
-    cols[0] = expects[0][1]
-    x.columns = cols
-    return x
+    x = x.loc[x["istop"].fillna(False), x.columns[0]]
+    x.name = expects[0][1]
+    return x.to_frame()
 
 
-x = pd.Series(
+a = pd.Series(
     ["this is a multiline text\nother line\nmore lines"], name="sample.multiline"
 ).to_frame()
 
-# results = tada.Executor([x], [["sample.lines"]])
-# for ret in reversed(results):
-#     # print(ret.head(10))
-#     break
 
+for res in reversed(
+    tada.Executor([], [["usenet.read_file.lines.clean_tokens.top90"]],)
+):
+    print(res)
+    break
 
-# results = tada.Executor([], [["usenet.read_file.lines.clean_tokens.top90"]])
-# for ret in reversed(results):
-#     print(ret.head(10))
-#     break
-
-x = pd.DataFrame(
-    columns=[
-        "usenet.read_file.lines.clean_tokens",
-        "usenet.read_file.lines.clean_tokens.counts",
-    ]
-)
-
-y = pd.DataFrame(columns=["usenet.read_file.lines.clean_tokens",])
-
-for x in tada.test_call([x, y], tada.tasks["top90"]):
-    print(x)
-
+for res in reversed(tada.Executor([a], [["sample.lines.clean_tokens.counts"]],)):
+    print(res)
+    break

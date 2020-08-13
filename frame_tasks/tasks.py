@@ -142,11 +142,13 @@ class Task:
             except AttributeError:
                 pass
             reference[(arg, ident)] = data_col
+            arg_reqs = filter(lambda x: x[0] == arg, self.requires)
             refer_pos = next(
                 filter(
-                    lambda x: (x[1][0] == arg)
-                    and ((x[1][1] == arg_col) or (x[1][1].matcher == arg_col.matcher)),
-                    enumerate(self.requires),
+                    lambda x: (
+                        (x[1][1] == arg_col) or (x[1][1].matcher == arg_col.matcher)
+                    ),
+                    enumerate(arg_reqs),
                 )
             )
             pos: int = refer_pos[0]
@@ -234,22 +236,28 @@ class TaskCaller:
         self.gen_appends = for_task.appends
         self.task_name = for_task.fname
 
-        no_dep_reqs = []
+        has_dep_reqs = set()
         for xa, xr in for_task.requires:
             try:
-                if not re.search(r"{.*?}", xr.string):
-                    no_dep_reqs.append(xa)
+                if re.search(r"{.*?}", xr.string):
+                    has_dep_reqs.add(xa)
             except AttributeError:
-                no_dep_reqs.append(xa)
+                pass
 
-        if for_task.requires and not no_dep_reqs:
+        if for_task.requires and has_dep_reqs == set(
+            map(lambda x: x[0], for_task.requires)
+        ):
             raise BadTask(f"All requirments for task {for_task} are dynamic")
         self.task_requires: List[Tuple[str, Variable]] = sorted(
-            for_task.requires, key=lambda x: x[0] in no_dep_reqs
+            for_task.requires, key=lambda x: x[0] not in has_dep_reqs
         )
+
+        self.len_requires = len(self.task_requires)
 
     def satisfy(self) -> Iterator[Tuple[CallReqsMap, List[RetArg]]]:
         for x in self.satisfy_requires():
+            if len(x) < self.len_requires:
+                continue
             try:
                 y = self.get_generates(x)
             except NotSolvable:
@@ -341,7 +349,8 @@ class TaskCaller:
             cols: List[str] = next(iter(self.have.values()))
             for ind in set(map(lambda x: x[0], generates)):
                 for col in cols:
-                    generates.append((ind, col))
+                    if (ind, col) not in generates:
+                        generates.append((ind, col))
         return generates
 
 
