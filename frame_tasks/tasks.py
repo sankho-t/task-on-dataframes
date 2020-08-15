@@ -10,9 +10,9 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 ver_maj, ver_min = list(map(int, sys.version.split(".")[:2]))
 if ver_maj == 3 and ver_min < 8:
-    from typing_extensions import Protocol  # type: ignore
+    from typing_extensions import Protocol, runtime_checkable  # type: ignore
 else:
-    from typing import Protocol  # type: ignore
+    from typing import Protocol, runtime_checkable  # type: ignore
 
 
 tasks: Dict[str, "Task"] = {}
@@ -29,6 +29,19 @@ class Variable:
             self.string = x
         else:
             self.matcher = x
+
+    @staticmethod
+    def from_q(x: str) -> "Variable":
+        if x.startswith("S"):
+            return Variable(x[1:])
+        else:
+            return Variable(re.compile(x[1:]))
+
+    def q_enc(self) -> str:
+        try:
+            return f"S{self.string}"
+        except AttributeError:
+            return f"M{self.matcher.pattern}"
 
     def __hash__(self):
         return hash(self.matcher)
@@ -50,9 +63,10 @@ class Variable:
         try:
             return self.string
         except AttributeError:
-            return str(self.matcher)
+            return f"P'{self.matcher.pattern}'"
 
 
+@runtime_checkable
 class BaseData(Protocol):
     columns: Iterable[Union[str, int]]
 
@@ -73,6 +87,7 @@ RetArg = Tuple[Optional[int], str]
 CallReqsMap = Dict[Tuple[int, str], Tuple[Arg, Variable]]
 
 
+@runtime_checkable
 class TaskableFunc(Protocol):
     def __call__(
         self,

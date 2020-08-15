@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+        integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+</head>
+
+<body>
+    <div class="container pt-1">
+        <div id="current_state">
+            <h1>Current</h1>
+            {% set state = current_state %}
+            {% block current_vars scoped %}{% endblock %}
+            {% block open_files scoped %}{% endblock %}
+            <div class="d-flex">
+                <a href="{{ back }}" class="order-2 btn btn-primary bg-warning">Cancel last task</a>
+                <h5 class="mr-auto order-1">Tasks</h5>
+            </div>
+            {% block actions scoped %}{% endblock %}
+        </div>
+    </div>
+
+    <div class="container pt-1">
+        <h1>Next</h1>
+        {% set show_taskname = 0 %}
+        {% for act in future_actions %}
+        <div>
+            {% set link = future_act_links[loop.index0] %}
+            <div>
+                {% block action scoped %}{% endblock %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+    integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+    crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+    integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+    crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+    integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+    crossorigin="anonymous"></script>
+
+</html>
