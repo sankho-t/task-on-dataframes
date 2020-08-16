@@ -14,15 +14,17 @@ State = NamedTuple(
     "State", [("Vars", Tuple[FrozenSet[str], ...]), ("Tasks", Tuple[str, ...])]
 )
 
-Action = NamedTuple(
+Action_ = NamedTuple(
     "Action", [("Task", str), ("CallMap", CallReqsMap), ("Returns", List[RetArg])]
 )
 
-Action.returns_int = lambda self: [
-    (-1, x[1]) if x[0] is None else x for x in self.Returns
-]
 
-Action.callmap_flat = lambda self: [(*x[0], *x[1]) for x in self.CallMap.items()]
+class Action(Action_):
+    def returns_int(self):
+        return [(-1, x[1]) if x[0] is None else x for x in self.Returns]
+
+    def callmap_flat(self):
+        return [(*x[0], *x[1]) for x in self.CallMap.items()]
 
 
 def actions_given_state(state: State) -> Iterable[Action]:

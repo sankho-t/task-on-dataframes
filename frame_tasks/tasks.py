@@ -70,7 +70,19 @@ class Variable:
 class BaseData(Protocol):
     columns: Iterable[Union[str, int]]
 
-    def reindex(self, columns=List[str]):
+    def reindex(self, columns=List[str]) -> BaseData:
+        ...
+
+    def drop_duplicates(self, subset=List[str]) -> BaseData:
+        ...
+
+    def join(self, data2: BaseData, on: List[str]) -> BaseData:
+        ...
+
+    def set_index(self, columns=List[str]) -> BaseData:
+        ...
+
+    def empty(self) -> bool:
         ...
 
 
@@ -143,7 +155,7 @@ class Task:
         reference = {}
         reindex: Dict[Arg, List[str]] = dict(
             map(
-                lambda x: (x[0], [None] * len(list(x[1]))),
+                lambda x: (x[0], [""] * len(list(x[1]))),
                 groupby(self.requires, key=lambda x: x[0]),
             )
         )
@@ -191,6 +203,7 @@ class Task:
             if any([x[0] for x in expects]):
                 if not isinstance(output_, BaseData) and isinstance(output_, Iterable):
                     for i, exp in groupby(expects, key=lambda x: x[0]):
+                        assert i is not None
                         try:
                             op = output_[i]
                         except IndexError:
@@ -207,9 +220,11 @@ class Task:
                     output = list(output_)
                 else:
                     warnings.warn(f"Return from {self.fname}: expected iterable")
+                    assert isinstance(output_, BaseData)
                     output = [output_]
             else:
-                op = output_
+                assert isinstance(output_, BaseData)
+                op_: BaseData = output_
                 if self.appends and len(reindex) == 1:
                     extras = (
                         data_pass[arg]
@@ -217,9 +232,9 @@ class Task:
                         .set_index(reindex[arg])
                     )
                     if not extras.empty:
-                        op = op.join(extras, on=reindex[arg])
+                        op_ = op_.join(extras, on=reindex[arg])
                 exp_ = set(map(lambda x: x[1], expects))
-                absent = exp_.difference(op.columns)
+                absent = exp_.difference(op_.columns)
                 if absent:
                     warnings.warn(f"Return from {self.fname}: {absent} not found")
                 output = [output_]
@@ -374,7 +389,7 @@ def test_call(
 ) -> Iterator[Tuple[CallReqsMap, List[RetArg]]]:
     hv = {}
     for i, xx in enumerate(x):
-        hv[i] = list(xx.columns)
+        hv[i] = [str(x) for x in xx.columns]
     task_caller = TaskCaller(hv, for_task)
 
     return task_caller.satisfy()
