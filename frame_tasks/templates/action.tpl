@@ -1,4 +1,4 @@
-{% extends "state.html" %}
+{% extends "state.tpl" %}
 {% block action %}
 
 <div class="action row mb-3 align-self-center">
@@ -10,8 +10,13 @@
                 <ul class="">
                     {% for _, source_col, arg, var in same_df %}
                     <li class="">
-                        <span class="source-col">{{ source_col }}</span>
-                        <span class="variable">{{ var }}</span>
+                        {% if cols_colors[source_col] %}
+                            {% set style_var = "text-decoration: " + cols_colors[source_col] + " double overline; text-decoration-thickness: 2px" %}
+                        {% else %}
+                            {% set style_var = "" %}
+                        {% endif %}
+                        <span class="source-column" style="{{style_var}}">{{ source_col|e }}</span>
+                        <span class="variable-pattern">{{ var }}</span>
                         {% if multi_arg %}
                         <span class="argument">({{ arg }})</span>
                         {% endif %}
@@ -23,7 +28,7 @@
         </ul>
     </div>
 
-    <div class="col-sm-2">
+    <div class="col-sm-2 align-self-center">
         {% if link is defined %}
         <a href="{{ link }}" class="btn btn-primary task-name">{{act.Task}}</a>
         {% else %}

@@ -1,0 +1,10 @@
+.variable-pattern {
+    font-size: small;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.source-col {
+    text-decoration-color: aquamarine;
+    text-decoration-style: double;
+    text-decoration-line: overline;
+}

@@ -4,6 +4,7 @@
 <head>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
         integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='styles/mainpage.css') }}">
 </head>
 
 <body>
@@ -14,8 +15,9 @@
             {% block current_vars scoped %}{% endblock %}
             {% block open_files scoped %}{% endblock %}
             <div class="d-flex">
-                <a href="{{ back }}" class="order-2 btn btn-primary bg-warning">Cancel last task</a>
-                <h5 class="mr-auto order-1">Tasks</h5>
+                <a href="{{ back }}" class="order-3 btn btn-primary bg-warning">Cancel last task</a>
+                <h5 class="order-1">Tasks</h5>
+                <a href="#" class="order-2 ml-3 mr-auto" id="toggle_task">Toggle</a>
             </div>
             {% block actions scoped %}{% endblock %}
         </div>
@@ -43,5 +45,14 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
     integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
     crossorigin="anonymous"></script>
+
+<script>
+    var toggle_cur_tasks = function () {
+        $("#current_state").children(".actions").toggle("slow");
+    }
+    $("#toggle_task").click(toggle_cur_tasks);
+    $.when($.ready).then(toggle_cur_tasks);
+
+</script>
 
 </html>

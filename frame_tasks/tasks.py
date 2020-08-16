@@ -70,16 +70,16 @@ class Variable:
 class BaseData(Protocol):
     columns: Iterable[Union[str, int]]
 
-    def reindex(self, columns=List[str]) -> BaseData:
+    def reindex(self, columns=List[str]) -> "BaseData":
         ...
 
-    def drop_duplicates(self, subset=List[str]) -> BaseData:
+    def drop_duplicates(self, subset=List[str]) -> "BaseData":
         ...
 
-    def join(self, data2: BaseData, on: List[str]) -> BaseData:
+    def join(self, data2: "BaseData", on: List[str]) -> "BaseData":
         ...
 
-    def set_index(self, columns=List[str]) -> BaseData:
+    def set_index(self, columns=List[str]) -> "BaseData":
         ...
 
     def empty(self) -> bool:

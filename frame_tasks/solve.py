@@ -52,7 +52,9 @@ def actions_given_state(state: State) -> Iterable[Action]:
                         break
                 else:
                     continue
-                found_actions.append(Action(Task=key, CallMap=callmap, Returns=returns))
+                act = Action(Task=key, CallMap=callmap, Returns=returns)
+                if act not in found_actions:
+                    found_actions.append(act)
 
     return found_actions
 
