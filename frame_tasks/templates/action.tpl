@@ -15,8 +15,15 @@
                         {% else %}
                             {% set style_var = "" %}
                         {% endif %}
-                        <span class="source-column" style="{{style_var}}">{{ source_col|e }}</span>
-                        <span class="variable-pattern">{{ var }}</span>
+                        
+                        <span class="source-column" style="{{style_var}}">
+                        {% if var.is_pat %}
+                            {% set start_tag = "<span class='column-match' >" %}
+                            {{ var.highlight_match(source_col|e, start_tag, "</span>")|safe }}
+                        {% else %}
+                            {{ source_col|e }}
+                        {% endif %}
+                        </span>
                         {% if multi_arg %}
                         <span class="argument">({{ arg }})</span>
                         {% endif %}

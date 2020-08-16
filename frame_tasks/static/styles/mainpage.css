@@ -8,3 +8,7 @@
     text-decoration-style: double;
     text-decoration-line: overline;
 }
+
+.column-match {
+    background-color: indianred;
+}

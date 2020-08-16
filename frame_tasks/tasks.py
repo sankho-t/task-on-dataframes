@@ -46,6 +46,22 @@ class Variable:
     def __hash__(self):
         return hash(self.matcher)
 
+    @property
+    def is_pat(self) -> bool:
+        try:
+            self.string
+            return False
+        except AttributeError:
+            return True
+
+    def highlight_match(self, x, start_tag, end_tag) -> str:
+        if not self.is_pat:
+            if x == self.string:
+                return start_tag + x + end_tag
+            return x
+        y = re.sub(self.matcher, start_tag + str(x) + end_tag, str(x))
+        return y
+
     def __eq__(self, x: object) -> bool:
         if isinstance(x, str):
             try:
