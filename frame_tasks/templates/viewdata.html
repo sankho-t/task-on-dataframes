@@ -9,7 +9,20 @@
 
 <body>
 
-    <ul class="nav justify-content-end">
+    <ul class="nav">
+        <ul class="flex-grow-1 pagination">
+            {% for page_name, page_url in nav_pages.items() %}
+            {% if page_name == current_page %}
+            <li class="page-item active">
+                <span class="page-link">{{ page_name }}</span>
+            </li>
+            {% else %}
+            <li class="page-item">
+                <a class="page-link" href="{{ page_url }}">{{ page_name }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+        </ul>
         {% for nav_key, nav_url in navs.items() %}
         <li class="nav-item">
             <a class="nav-link" href="{{nav_url}}">{{ nav_key }}</a>
