@@ -170,9 +170,10 @@ def download_csv(index: int, q: str):
     if isinstance(index, str):
         index = int(index)
 
-    out = list(bs.real_outputs())[index]
+    out: pd.DataFrame = list(bs.real_outputs())[::-1][index]
 
-    x = io.BytesIO()
-    out.to_csv(x)
-
-    return send_file(x)
+    ret = io.BytesIO(out.to_csv().encode("utf-8"))
+    name = max(out.columns, key=len)
+    return send_file(
+        ret, mimetype="text/csv", as_attachment=True, attachment_filename=name
+    )
