@@ -6,6 +6,7 @@ import pickle as pk
 import shutil
 import tempfile
 from datetime import datetime
+from time import sleep
 from typing import List, Optional, Union
 
 import mmh3
@@ -94,6 +95,15 @@ def has_completed(
         return None
     except (IOError, EOFError):
         return None
+    except pk.UnpicklingError:
+        sleep(5000)
+        try:
+            with open(path, "rb") as f:
+                data = pk.load(f)
+        except pk.UnpicklingError:
+            return None
+        except:
+            return has_completed(browse_state)
     if isinstance(data, datetime):
         return data
     if isinstance(data, list):
