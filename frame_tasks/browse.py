@@ -101,7 +101,6 @@ class BrowseState:
                 v = v_[0]
                 if m:
                     k1, k2 = m.groups()
-                    print(v)
                     v1, v2 = v.split(".", maxsplit=1)
                     cm[int(k1), k2] = v1, Variable.from_q(v2)
             rets: List[RetArg] = []

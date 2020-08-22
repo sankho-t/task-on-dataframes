@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
         integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <script src="https://code.jquery.com/jquery-3.5.0.js"></script>
+    <title>View Output</title>
 </head>
 
 <body>
@@ -23,6 +24,12 @@
             {% endif %}
             {% endfor %}
         </ul>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="big-col">Bigger Columns</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="small-col">Smaller Columns</a>
+        </li>
         {% for nav_key, nav_url in navs.items() %}
         <li class="nav-item">
             <a class="nav-link" href="{{nav_url}}">{{ nav_key }}</a>
@@ -34,6 +41,22 @@
 
 <script>
     $("table").addClass("table").addClass("table-hover");
+
+    $("#big-col").on("click", function () {
+        $.get("{{col_resize[0]}}", function (data, status) {
+            if (status == 'success') {
+                window.location.reload(true);
+            }
+        })
+    });
+
+    $("#small-col").on("click", function () {
+        $.get("{{col_resize[1]}}", function (data, status) {
+            if (status == 'success') {
+                window.location.reload(true);
+            }
+        })
+    });
 </script>
 
 </html>

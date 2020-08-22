@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+    <script src="https://code.jquery.com/jquery-3.5.0.js"></script>
+    <title>Working</title>
+</head>
+
+<body>
+    Waiting for task completion<span id='dot'></span> <br>
+    Started at {{ start_time }}
+
+    <script>
+        $(document).ready(
+            () => {
+                setTimeout(() => window.location.reload(true), 5000);
+                setInterval(() => {
+                    var txt = $("#dot").text();
+                    $("#dot").text(txt + '.');
+                }, 1000)
+            });
+    </script>
+
+</body>
+
+</html>

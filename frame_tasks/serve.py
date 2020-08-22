@@ -1,10 +1,18 @@
 import io
-from typing import List, Optional
+import os
+import logging
+import pathlib
+import pickle as pk
+import shutil
+import tempfile
+from datetime import datetime
+from typing import List, Optional, Union
+
+import mmh3
 import pandas as pd
-import pkg_resources
-from flask import Flask, render_template, url_for, send_file
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader
-from pandas.io.formats.style import Styler
+from celery import Celery
+from celery.worker.request import Request as celeryRequest
+from flask import Flask, make_response, render_template, request, send_file, url_for
 from palettable.colorbrewer.diverging import RdGy_10 as colormap
 
 from .basic_tasks import tada
@@ -12,7 +20,24 @@ from .browse import BrowseState
 
 app = Flask(__name__)
 
-print(tada.tasks.keys())
+
+app.config.update(CELERY_BROKER_URL=os.environ["CELERY_BROKER_URL"],)
+
+
+def make_celery(app):
+    celery = Celery(app.import_name, broker=app.config["CELERY_BROKER_URL"],)
+    celery.conf.update(app.config)
+
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery.Task = ContextTask
+    return celery
+
+
+celery = make_celery(app)
 
 
 def get_unique_colors(n):
@@ -24,6 +49,58 @@ def get_unique_colors(n):
         col = cm(i * step)
         out.append("#" + "".join(to_hex(col[j] * 256) for j in range(3)))
     return out
+
+
+logger = logging.getLogger("frame_tasks.celery")
+
+
+def browsestate_save_path(q: str) -> pathlib.Path:
+    hash_ = mmh3.hash(q, 100)
+    return pathlib.Path(tempfile.gettempdir()) / f"frame_tasks.{hash_}.pkl"
+
+
+@celery.task(name="frame_tasks.serve_exec")
+def execute_tada_task(browse_state: str):
+    path = browsestate_save_path(browse_state)
+    logger.info(f"Triggered task {path}")
+    if path.exists():
+        x = has_completed(browse_state)
+        if isinstance(x, (list, datetime)):
+            return True
+    with open(path, "wb") as f:
+        pk.dump(datetime.now(), f)
+    logger.info("Started task")
+    bs = BrowseState.from_url_q(browse_state)
+    try:
+        out = list(bs.real_outputs())
+    except Exception as exc:
+        logger.exception(exc)
+        with open(path, "wb") as f:
+            pass
+        return None
+    with open(path, "wb") as f:
+        pk.dump(out, f)
+    return True
+
+
+def has_completed(
+    browse_state: str,
+) -> Optional[Union[List[pd.DataFrame], datetime, bool]]:
+    path = browsestate_save_path(browse_state)
+    try:
+        with open(path, "rb") as f:
+            data = pk.load(f)
+    except FileNotFoundError:
+        return None
+    except (IOError, EOFError):
+        return None
+    if isinstance(data, datetime):
+        return data
+    if isinstance(data, list):
+        if all(lambda x: isinstance(x, pd.DataFrame) for x in data):
+            return data
+    logger.warn(f"Unknown data format in {path}")
+    return False
 
 
 @app.route("/explore/")
@@ -63,117 +140,4 @@ def explore(q=""):
         back=back_url,
         dataview_urls=dataview_urls,
         cols_colors=cols_colors,
-    )
-
-
-TEMPLATE_DIR = pkg_resources.resource_filename(__name__, "templates")
-
-
-class MyStyler(Styler):
-    env = Environment(
-        loader=ChoiceLoader(
-            [
-                FileSystemLoader(TEMPLATE_DIR),  # contains ours
-                Styler.loader,  # the default
-            ]
-        )
-    )
-    template = env.get_template("myhtml.tpl")
-
-
-VIEW_MAX_COLWIDTH = 30
-PAGE_SIZE = 30
-NAV_PAGE_COUNT = 5
-
-
-def page_nav(cur: int, maxpage: int) -> List[int]:
-    start = max(cur - NAV_PAGE_COUNT // 2, 1)
-    stop = min(cur + NAV_PAGE_COUNT // 2, maxpage)
-    out = list(range(start, stop + 1))
-    if 0 not in out:
-        out.insert(0, 0)
-    if maxpage not in out:
-        out.append(maxpage)
-    return out
-
-
-from math import ceil
-
-
-@app.route("/view/<page>/<index>/<q>")
-def view(index: int, page: int, q: str):
-    bs = BrowseState.from_url_q(q)
-
-    if isinstance(index, str):
-        index = int(index)
-    if isinstance(page, str):
-        if page.lower() == "first":
-            page = 0
-        elif page.lower() == "last":
-            page = -1
-        page = int(page)
-    out_ = list(bs.real_outputs())[::-1]
-    index = min(len(out_), index)
-    out = out_[index]
-
-    npages = ceil(out.shape[0] / PAGE_SIZE)
-
-    if page < 0:
-        page = npages + page
-    out = out.head(PAGE_SIZE * (page + 1)).tail(PAGE_SIZE)
-    nav_pages_name = [
-        {0: "First", npages - 1: "Last"}.get(x, str(x))
-        for x in page_nav(page, maxpage=npages - 1)
-    ]
-
-    nav_pages = dict(
-        zip(
-            nav_pages_name,
-            [
-                url_for("view", index=index, page=x, q=q)
-                for x in page_nav(page, maxpage=npages - 1)
-            ],
-        )
-    )
-    try:
-        current_page: Optional[int] = page_nav(page, maxpage=npages - 1).index(page)
-    except IndexError:
-        current_page = None
-
-    escape_html_tags = (
-        lambda x: x.replace("<", r"\<").replace(">", r"\>") if isinstance(x, str) else x
-    )
-    trim_col = lambda x: x[:30] + "..." if len(x) > 30 else x
-
-    data = pd.DataFrame(out).applymap(escape_html_tags).astype(str).applymap(trim_col)
-
-    table = MyStyler(data).render()
-
-    back_url = url_for("explore", q=q)
-    navs = {
-        "Back": back_url,
-        "Download as csv": url_for("download_csv", index=index, q=q),
-    }
-    return render_template(
-        "viewdata.html",
-        table=table,
-        navs=navs,
-        nav_pages=nav_pages,
-        current_page=current_page,
-    )
-
-
-@app.route("/download/csv/<index>/<q>")
-def download_csv(index: int, q: str):
-    bs = BrowseState.from_url_q(q)
-
-    if isinstance(index, str):
-        index = int(index)
-
-    out: pd.DataFrame = list(bs.real_outputs())[::-1][index]
-
-    ret = io.BytesIO(out.to_csv().encode("utf-8"))
-    name = max(out.columns, key=len)
-    return send_file(
-        ret, mimetype="text/csv", as_attachment=True, attachment_filename=name
     )

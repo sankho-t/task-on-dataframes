@@ -13,11 +13,9 @@ any_name = pat(r"(.+)")
 @tada.makes(["usenet.path"], appends=False)
 @tada.close_task()
 def get_paths(expects, **kwargs):
-    return (
-        pd.Series(list(glob.glob("20_newsgroups/*/*")), name=expects[0][1])
-        .to_frame()
-        .head(20)
-    )
+    return pd.Series(
+        list(glob.glob("20_newsgroups/*/*")), name=expects[0][1]
+    ).to_frame()
 
 
 @tada.new_task()
@@ -26,7 +24,7 @@ def get_paths(expects, **kwargs):
 @tada.close_task()
 def get_text(x, expects, **kwargs):
     inp = x[x.columns[0]]
-    out = inp.apply(lambda x: open(x).read())
+    out = inp.apply(lambda x: open(x, errors="replace").read())
     out.name = expects[0][1]
     return x.join(out).reset_index(drop=True)
 
