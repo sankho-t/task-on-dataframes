@@ -14,15 +14,12 @@ import pandas as pd
 from celery import Celery
 from celery.worker.request import Request as celeryRequest
 from flask import Flask, make_response, render_template, request, send_file, url_for
-from palettable.colorbrewer.diverging import RdGy_10 as colormap
 
 from .basic_tasks import tada
 from .browse import BrowseState
+from .extras_ui import get_unique_colors
 
 app = Flask(__name__)
-
-
-app.config.update(CELERY_BROKER_URL=os.environ["CELERY_BROKER_URL"],)
 
 
 def make_celery(app):
@@ -38,50 +35,47 @@ def make_celery(app):
     return celery
 
 
-celery = make_celery(app)
-
-
-def get_unique_colors(n):
-    cm = colormap.mpl_colormap
-    out = []
-    step = 1.0 / n
-    to_hex = lambda x: "{:0>2}".format(hex(int(x))[2:])
-    for i in range(n):
-        col = cm(i * step)
-        out.append("#" + "".join(to_hex(col[j] * 256) for j in range(3)))
-    return out
-
-
-logger = logging.getLogger("frame_tasks.celery")
-
-
 def browsestate_save_path(q: str) -> pathlib.Path:
     hash_ = mmh3.hash(q, 100)
     return pathlib.Path(tempfile.gettempdir()) / f"frame_tasks.{hash_}.pkl"
 
 
-@celery.task(name="frame_tasks.serve_exec")
-def execute_tada_task(browse_state: str):
-    path = browsestate_save_path(browse_state)
-    logger.info(f"Triggered task {path}")
-    if path.exists():
-        x = has_completed(browse_state)
-        if isinstance(x, (list, datetime)):
-            return True
-    with open(path, "wb") as f:
-        pk.dump(datetime.now(), f)
-    logger.info("Started task")
-    bs = BrowseState.from_url_q(browse_state)
-    try:
-        out = list(bs.real_outputs())
-    except Exception as exc:
-        logger.exception(exc)
+logger = logging.getLogger()
+executor = None
+
+
+def execute_tada_task(browse_state_: str):
+    raise RuntimeError("CELERY_BROKER_URL required to be set")
+
+
+if "CELERY_BROKER_URL" in os.environ:
+    app.config.update(CELERY_BROKER_URL=os.environ["CELERY_BROKER_URL"],)
+    executor = make_celery(app)
+
+    logger = logging.getLogger("frame_tasks.celery")
+
+    @executor.task(name="frame_tasks.serve_exec")
+    def execute_tada_task(browse_state: str):
+        path = browsestate_save_path(browse_state)
+        logger.info(f"Triggered task {path}")
+        if path.exists():
+            x = has_completed(browse_state)
+            if isinstance(x, (list, datetime)):
+                return True
         with open(path, "wb") as f:
-            pass
-        return None
-    with open(path, "wb") as f:
-        pk.dump(out, f)
-    return True
+            pk.dump(datetime.now(), f)
+        logger.info("Started task")
+        bs = BrowseState.from_url_q(browse_state)
+        try:
+            out = list(bs.real_outputs())
+        except Exception as exc:
+            logger.exception(exc)
+            with open(path, "wb") as f:
+                pass
+            return None
+        with open(path, "wb") as f:
+            pk.dump(out, f)
+        return True
 
 
 def has_completed(

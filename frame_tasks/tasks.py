@@ -211,7 +211,25 @@ class Task:
                 del kwargs["expects"]
             assert "requires" not in kwargs
             assert "expects" not in kwargs
-            output_ = self.fcode(requires=reference, expects=expects, **kwargs)
+            kwargs["requires"] = reference
+            kwargs["expects"] = expects
+            while True:
+                try:
+                    output_ = self.fcode(**kwargs)
+                except TypeError as err:
+                    for key in ["requires", "expects"]:
+                        if str(err).endswith(
+                            f"got an unexpected keyword argument '{key}'"
+                        ):
+                            del kwargs[key]
+                            warnings.warn(
+                                f"Calling task {self.fname} failed, with TypeError for {key}, calling without."
+                            )
+                            break
+                    else:
+                        raise
+                else:
+                    break
         else:
             output_ = self.fcode(**kwargs)  # type: ignore
 
