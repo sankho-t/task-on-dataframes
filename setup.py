@@ -14,4 +14,5 @@ setup(
         "celery",
         "murmurhash3",
     ],
+    version="0.1.0",
 )
