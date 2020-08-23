@@ -7,9 +7,7 @@ a = pd.Series(
 ).to_frame()
 
 
-for res in reversed(
-    tada.Executor([], [["usenet.read_file.lines.clean_tokens.top90"]],)
-):
+for res in reversed(tada.Executor([], [["usenet.read_file.lines.clean_tokens"]],)):
     print(res)
     break
 

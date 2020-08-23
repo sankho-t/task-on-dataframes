@@ -35,7 +35,7 @@ def get_text(x, expects, **kwargs):
 @tada.close_task()
 def get_splits(x, expects, **kwargs):
     inp = x[x.columns[0]]
-    out = inp.str.split("\r?\n").explode()
+    out = inp.astype(str).str.split("\r?\n").explode()
     out.name = expects[0][1]
     return x.join(out).reset_index(drop=True)
 
