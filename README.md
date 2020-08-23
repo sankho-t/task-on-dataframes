@@ -2,6 +2,9 @@
 
 Utility for performing tasks on dataframes.
 
+![Screenshots](demo.gif) Screenshots
+
+
 ## Requires
 
 A message queue is required that can work with Celery (i.e. RabbitMQ).
